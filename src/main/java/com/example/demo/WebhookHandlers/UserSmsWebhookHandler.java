@@ -1,17 +1,12 @@
 package com.example.demo.WebhookHandlers;
 
-import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
-
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -23,20 +18,22 @@ import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.document.spec.GetItemSpec;
+import com.example.demo.Entities.AllUsers;
 import com.example.demo.Entities.User;
 import com.example.demo.Entities.UserCopy;
 import com.example.demo.Entities.UserRequest;
+import com.example.demo.Repo.AllUserRepo;
 import com.example.demo.Repo.UserRepo;
 import com.example.demo.Repo.UserRequestRepo;
-import com.twilio.Twilio;
-import com.twilio.rest.api.v2010.account.Message;
-import com.twilio.type.PhoneNumber;
 
 @RestController
 public class UserSmsWebhookHandler {
 
 	@Autowired
 	private UserRepo repo;
+
+	@Autowired
+	private AllUserRepo allRepo;
 
 	@Autowired
 	private UserRequestRepo requestRepo;
@@ -73,14 +70,17 @@ public class UserSmsWebhookHandler {
 	public void handleType(@RequestParam("Name") String name, @RequestParam("Body") String body,
 			@RequestParam("Number") String number) throws NoSuchAlgorithmException {
 		User user = new User(body.trim(), name.trim(), number.trim());
-
+		AllUsers allUser = new AllUsers(body.trim(), name.trim(), number.trim());
 		Table table = dynamo.getTable("Users");
 		GetItemSpec item = new GetItemSpec().withPrimaryKey("userId", user.getUserId());
 		Item t = table.getItem(item);
-		if (!Objects.nonNull(t))// makes sure no duplicate values, if not included then we make a new one
+		if (!Objects.nonNull(t)) {// makes sure no duplicate values, if not included then we make a new one
 			repo.save(user);
-		else// if already included, then we update the previous one with the new one
+			allRepo.save(allUser);
+		} else {// if already included, then we update the previous one with the new one
 			repo.update(user.getUserId(), user);
+			allRepo.update(allUser.getUserId(), allUser);
+		}
 
 	}
 
@@ -108,48 +108,22 @@ public class UserSmsWebhookHandler {
 	public void addUserRequest(@RequestParam("Name") String name, @RequestParam("Type") String type,
 			@RequestParam("Number") String number, @RequestParam("Request") String request)
 			throws NumberFormatException, NoSuchAlgorithmException {
-		String details = request.split("1.")[1];
-		String price = request.split("2.")[1];
-		String timeTaken = request.split("3.")[1];
-		String timeline = request.split("4.")[1];
-
-		// ford approval beforehand and then add to db
-
-		Twilio.init(accountSid, authToken);
-		String text = "Hi Ford, someone else had made a request. Please read with Y or N if you would like to accept it or decline it."
-				+ "\nDetails: " + details + "\nPrice: " + price + "\nTime: " + timeTaken + "\nTimeline: " + timeline;// sends
-																														// message
-																														// to
-																														// ford
-																														// to
-																														// approve
-																														// of
-																														// request
-		Message message = Message.creator(new PhoneNumber(fordNumber), new PhoneNumber(myNumber), text).create();
+		String[] arr = request.split("\\."); // 1.P 2.j 3.fas -> [1],[P 2], [j 3], [fas]
+		String details = arr[1].substring(0, arr[1].length() - 1).trim();
+		String price = arr[2].substring(0, arr[2].length() - 1).trim();
+		String timeline = arr[3].trim();
 
 		UserRequest userRequest = new UserRequest(new UserCopy(type.trim(), name.trim(), number.trim()), details, price,
-				timeTaken, timeline);
+				timeline);
 		requestRepo.save(userRequest);// saves value to dynamodb database
 
 	}
 
-	/*
-	 * Currently working on how I can use this to approve ford's request
-	 * 
-	 * Current plan is to check if Ford resonds with Y or N if Y then it proceeds
-	 * with Twilio if N then it tells the user that their request was denied
-	 */
-	@RequestMapping(value = "/approval", method = RequestMethod.POST)
-	@ResponseBody
-	public static void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
-		String body = request.getParameter("Body");
-		String message = "Message";
-		if (body.equals("Y")) {
-			// Say hi
-			message = "Hi there!";
-		} else if (body.equals("N")) {
-			// Say goodbye
-			message = "Goodbye!";
-		}
+	@RequestMapping(value = "/deleteUser")
+	public void deleteUser(@RequestParam("Name") String name, @RequestParam("Type") String type,
+			@RequestParam("Number") String number) throws NoSuchAlgorithmException {
+		User user = new User(type, name, number);
+		Table table = dynamo.getTable("Users");
+		table.deleteItem("userId", user.getUserId());// deletes item
 	}
 }

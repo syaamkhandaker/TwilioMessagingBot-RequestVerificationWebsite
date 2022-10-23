@@ -35,21 +35,16 @@ public class UserRequest {
 	private String price;
 
 	@DynamoDBAttribute
-	private String timeTaken;
-
-	@DynamoDBAttribute
 	private String timeline;
 
-	public UserRequest(UserCopy user, String details, String price, String timeTaken, String timeline)
-			throws NoSuchAlgorithmException {
+	public UserRequest(UserCopy user, String details, String price, String timeline) throws NoSuchAlgorithmException {
 		super();
 		this.user = user;
 		this.details = details;
 		this.price = price;
-		this.timeTaken = timeTaken;
 		this.timeline = timeline;
 		MessageDigest mes = MessageDigest.getInstance("SHA-256");
-		String str = "" + user.toString() + details + price + timeTaken;
+		String str = "" + user.toString() + details + price;
 		mes.update(str.getBytes());
 		this.requestId = DatatypeConverter.printHexBinary(mes.digest());
 	}
@@ -80,14 +75,6 @@ public class UserRequest {
 
 	public void setPrice(String price) {
 		this.price = price;
-	}
-
-	public String getTimeTaken() {
-		return timeTaken;
-	}
-
-	public void setTimeTaken(String timeTaken) {
-		this.timeTaken = timeTaken;
 	}
 
 	public String getTimeline() {

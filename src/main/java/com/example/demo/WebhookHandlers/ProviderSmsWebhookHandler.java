@@ -1,7 +1,8 @@
 package com.example.demo.WebhookHandlers;
 
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
+import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -23,10 +24,12 @@ import com.amazonaws.services.dynamodbv2.document.spec.GetItemSpec;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.dynamodbv2.model.ScanRequest;
 import com.amazonaws.services.dynamodbv2.model.ScanResult;
+import com.example.demo.Entities.AllProviders;
 import com.example.demo.Entities.PastUserRequest;
 import com.example.demo.Entities.Provider;
 import com.example.demo.Entities.UserCopy;
 import com.example.demo.Entities.UserRequest;
+import com.example.demo.Repo.AllProviderRepo;
 import com.example.demo.Repo.PastUserRequestRepo;
 import com.example.demo.Repo.ProviderRepo;
 import com.example.demo.Repo.UserRepo;
@@ -39,6 +42,9 @@ public class ProviderSmsWebhookHandler {
 
 	@Autowired
 	private ProviderRepo repo;
+
+	@Autowired
+	private AllProviderRepo allRepo;
 
 	@Autowired
 	private PastUserRequestRepo pastRepo;
@@ -77,14 +83,17 @@ public class ProviderSmsWebhookHandler {
 	public void handleType(@RequestParam("Name") String name, @RequestParam("Body") String body,
 			@RequestParam("Number") String number) throws NoSuchAlgorithmException {
 		Provider provider = new Provider(body.trim(), name.trim(), number.trim());
-
+		AllProviders allProvider = new AllProviders(body.trim(), name.trim(), number.trim());
 		Table table = dynamo.getTable("Providers");
 		GetItemSpec item = new GetItemSpec().withPrimaryKey("providerId", provider.getProviderId());
 		Item t = table.getItem(item);
-		if (!Objects.nonNull(t))
+		if (!Objects.nonNull(t)) {
 			repo.save(provider);
-		else
+			allRepo.save(allProvider);
+		} else {
 			repo.update(provider.getProviderId(), provider);
+			allRepo.update(allProvider.getProviderId(), allProvider);
+		}
 	}
 
 	public String types(String val) {
@@ -97,19 +106,16 @@ public class ProviderSmsWebhookHandler {
 			add += "Moving Help";
 			break;
 		case "3":
-			add += "Cleaning";
+			add += "Cleaning Help";
 			break;
 		case "4":
-			add += "Freelancing";
+			add += "Freelancing Help";
 			break;
 		case "5":
-			add += "Pet Sitting";
+			add += "Pet Sitting Help";
 			break;
 		case "6":
-			add += "Ride Sharing";
-			break;
-		case "7":
-			add += "Requests in other Categories";
+			add += "Driving Help";
 			break;
 		}
 		return add;
@@ -133,10 +139,9 @@ public class ProviderSmsWebhookHandler {
 				res.getItems().get(0).get("User").getM().get("userName").getS(),
 				res.getItems().get(0).get("User").getM().get("phoneNumber").getS());
 		UserRequest userRequest = new UserRequest(user, res.getItems().get(0).get("details").getS(),
-				res.getItems().get(0).get("price").getS(), res.getItems().get(0).get("timeTaken").getS(),
-				res.getItems().get(0).get("timeline").getS());
+				res.getItems().get(0).get("price").getS(), res.getItems().get(0).get("timeline").getS());
 		PastUserRequest pastUserRequest = new PastUserRequest(user, userRequest.getDetails(), userRequest.getPrice(),
-				userRequest.getTimeTaken(), userRequest.getTimeline());
+				userRequest.getTimeline());
 
 		Twilio.init(accountSid, authToken);
 
@@ -152,9 +157,9 @@ public class ProviderSmsWebhookHandler {
 					: dbValues.get("type").getN();
 			if (test.contains("" + user.getType())
 					&& !dbValues.get("phoneNumber").getS().equals(user.getPhoneNumber())) {
-				String text = user.userName + " wants help with " + types(user.getType()) + ".\nDetails: "
-						+ userRequest.getDetails() + "\nPrice: " + userRequest.getPrice() + "\nExpected Time: "
-						+ userRequest.getTimeTaken();
+				String text = user.userName + " needs " + types(user.getType()) + ".\nDetails: "
+						+ userRequest.getDetails() + "\nPrice: " + userRequest.getPrice() + "\nTimeline: "
+						+ userRequest.getTimeline();
 				String number = "" + dbValues.get("phoneNumber").getS();
 				Message message = Message.creator(new PhoneNumber(number), new PhoneNumber(myNumber), text).create();
 			}
@@ -169,7 +174,8 @@ public class ProviderSmsWebhookHandler {
 	 * message back saying that they did'nt properly put the name in. Makes the user
 	 * retry to put the correct name in.
 	 * 
-	 * @param body is the name the provider puts in response to each request they get
+	 * @param body is the name the provider puts in response to each request they
+	 * get
 	 * 
 	 * @param providerName is the provider's name, so we can send it to the user who
 	 * asked for the requests
@@ -197,15 +203,14 @@ public class ProviderSmsWebhookHandler {
 		if (test) {
 			Twilio.init(accountSid, authToken);
 			Message message = Message.creator(new PhoneNumber(providerPhoneNumber), new PhoneNumber(myNumber),
-					"Your offer has been sent to the creator of the request. "
-							+ "You will receive a message from them if they choose to accept you.")
+					"Your offer has been sent to " + body + ".\nThey will message you if they choose to accept.")
 					.create();
-			Message m = Message
-					.creator(new PhoneNumber(userPhoneNumber), new PhoneNumber(myNumber),
-							"We found a " + " provider who could fulfill your task. Their number is "
-									+ providerPhoneNumber + ". Accept them simply by messaging them."
-									+ " Once the request is done please respond with GO to start your next request.")
+			String provName = providerName.split(" ").length > 1 ? providerName.split(" ")[0] : providerName;
+			Message m = Message.creator(new PhoneNumber(userPhoneNumber), new PhoneNumber(myNumber),
+					provName + " wants to fulfill your gig. Their number is " + providerPhoneNumber
+							+ "\nSend them a message to begin the gig.")
 					.create();
+
 			return;
 		}
 		throw new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "");
