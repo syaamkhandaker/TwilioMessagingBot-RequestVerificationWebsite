@@ -1,9 +1,11 @@
-/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Entities/AllProviders.java
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Repo/ProviderRepo.java
+/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Repo/BusinessRequestRepo.java
+/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Entities/BusinessCopy.java
+/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Entities/Business.java
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Entities/UserCopy.java
+/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Entities/BusinessRequest.java
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Config/DynamoDBConfiguration.java
-/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Repo/AllProviderRepo.java
-/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Repo/AllUserRepo.java
+/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/WebhookHandlers/BusinessSmsWebhookHandler.java
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/WebhookHandlers/ProviderSmsWebhookHandler.java
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/WebhookHandlers/UserSmsWebhookHandler.java
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Repo/PastUserRequestRepo.java
@@ -14,4 +16,3 @@
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Entities/User.java
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/DemoApplication.java
 /Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Entities/Provider.java
-/Users/syaamboss/Desktop/Coding/syaamworkspace/Gigsurf/TwilioMessagingBot/src/main/java/com/example/demo/Entities/AllUsers.java
