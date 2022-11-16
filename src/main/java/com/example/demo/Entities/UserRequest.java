@@ -36,13 +36,18 @@ public class UserRequest {
 
 	@DynamoDBAttribute
 	private String timeline;
+	
 
-	public UserRequest(UserCopy user, String details, String price, String timeline) throws NoSuchAlgorithmException {
+	@DynamoDBAttribute
+	private String approved;
+
+	public UserRequest(UserCopy user, String details, String price, String timeline, String approved) throws NoSuchAlgorithmException {
 		super();
 		this.user = user;
 		this.details = details;
 		this.price = price;
 		this.timeline = timeline;
+		this.approved = approved;
 		MessageDigest mes = MessageDigest.getInstance("SHA-256");
 		String str = "" + user.toString() + details + price;
 		mes.update(str.getBytes());
@@ -83,6 +88,14 @@ public class UserRequest {
 
 	public void setTimeline(String timeline) {
 		this.timeline = timeline;
+	}
+
+	public String isApproved() {
+		return approved;
+	}
+
+	public void setApproved(String approved) {
+		this.approved = approved;
 	}
 
 }

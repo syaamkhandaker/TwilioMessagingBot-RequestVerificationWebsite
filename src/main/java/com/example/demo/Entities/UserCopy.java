@@ -37,7 +37,7 @@ public class UserCopy {
 		this.userName = userName;
 		this.phoneNumber = phoneNumber;
 		MessageDigest mes = MessageDigest.getInstance("SHA-256");
-		String str = "" + this.phoneNumber;
+		String str = "" + this.phoneNumber + this.userName + this.type;
 		mes.update(str.getBytes());
 		this.userId = DatatypeConverter.printHexBinary(mes.digest());
 	}
