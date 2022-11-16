@@ -1,8 +1,11 @@
 package com.example.demo.WebhookHandlers;
 
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.Objects;
+
+import javax.xml.bind.DatatypeConverter;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -59,10 +62,10 @@ public class ProviderSmsWebhookHandler {
 	public static final String authToken = "5da29f9724c483857a32e1cbecbff52e";
 	public static final String myNumber = "+19134122893";
 
-	private AmazonDynamoDB client = AmazonDynamoDBClientBuilder.standard()
+	private static AmazonDynamoDB client = AmazonDynamoDBClientBuilder.standard()
 			.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(endpoint, "us-east-2"))
 			.withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials(accessKey, privateKey))).build();
-	private DynamoDB dynamo = new DynamoDB(client);
+	private static DynamoDB dynamo = new DynamoDB(client);
 
 	/*
 	 * This method adds each of the Student users into the database. The database is
@@ -96,29 +99,45 @@ public class ProviderSmsWebhookHandler {
 		}
 	}
 
-	public String types(String val) {
-		String add = "";
-		switch (val) {
-		case "1":
-			add += "Homework Help";
-			break;
-		case "2":
-			add += "Moving Help";
-			break;
-		case "3":
-			add += "Cleaning Help";
-			break;
-		case "4":
-			add += "Freelancing Help";
-			break;
-		case "5":
-			add += "Pet Sitting Help";
-			break;
-		case "6":
-			add += "Driving Help";
-			break;
+	@RequestMapping(value = "/sendOutActiveTasks", method = RequestMethod.POST)
+	private static void sendOutActiveTasks(@RequestParam("Type") String type, @RequestParam("Number") String phoneNumber) throws NoSuchAlgorithmException {
+		
+		Twilio.init(accountSid, authToken);
+		
+		MessageDigest mes = MessageDigest.getInstance("SHA-256");
+		String str = "" + phoneNumber;
+		mes.update(str.getBytes());
+		String providerId = DatatypeConverter.printHexBinary(mes.digest());
+		
+		Table table = dynamo.getTable("Providers");
+		GetItemSpec item = new GetItemSpec().withPrimaryKey("providerId", providerId);
+		Item t = table.getItem(item);
+		
+		if((!Objects.nonNull(t))) {
+			ScanRequest pastUserRequestScanRequest = new ScanRequest().withTableName("PastUserRequest");
+			ScanResult pastUserRequestScan = client.scan(pastUserRequestScanRequest);
+			end: for (Map<String, AttributeValue> dbValues : pastUserRequestScan.getItems()) {
+				String pastUserRequestTypes = dbValues.get("User").getM().get("type").getN() == null ? dbValues.get("User").getM().get("type").getS()
+						: dbValues.get("User").getM().get("type").getN();
+				String hirerTypes = type;
+				for (String s : hirerTypes.split("")) { 
+					if (!s.equals("") && pastUserRequestTypes.contains(s)) {
+						if (!dbValues.get("User").getM().get("phoneNumber").getS().equals(phoneNumber)) {
+							String text = dbValues.get("User").getM().get("userName").getS() + " has an opportunity" + ".\nDetails: " + dbValues.get("details").getS()
+									+ "\nPrice: " + dbValues.get("price").getS() + "\nTimeline: " + dbValues.get("timeline").getS();
+							Message message = Message.creator(new PhoneNumber(phoneNumber), new PhoneNumber(myNumber), text)
+									.create();
+							continue end;
+						}
+
+					}
+				}
+			
+			}
 		}
-		return add;
+		
+		
+		
 	}
 
 	/*
@@ -135,11 +154,16 @@ public class ProviderSmsWebhookHandler {
 	public void sendRequests() throws NoSuchAlgorithmException {
 		ScanRequest userScan = new ScanRequest().withTableName("UserRequest");
 		ScanResult res = client.scan(userScan);
-		UserCopy user = new UserCopy(res.getItems().get(0).get("User").getM().get("type").getS(),
-				res.getItems().get(0).get("User").getM().get("userName").getS(),
-				res.getItems().get(0).get("User").getM().get("phoneNumber").getS());
-		UserRequest userRequest = new UserRequest(user, res.getItems().get(0).get("details").getS(),
-				res.getItems().get(0).get("price").getS(), res.getItems().get(0).get("timeline").getS());
+		int index = 0;
+		if (res.getItems().get(0).get("details").equals("")) {
+			index = 1;
+		}
+		UserCopy user = new UserCopy(res.getItems().get(index).get("User").getM().get("type").getS().trim(),
+				res.getItems().get(index).get("User").getM().get("userName").getS().trim(),
+				res.getItems().get(index).get("User").getM().get("phoneNumber").getS().trim());
+		UserRequest userRequest = new UserRequest(user, res.getItems().get(index).get("details").getS().trim(),
+				res.getItems().get(index).get("price").getS().trim(), res.getItems().get(index).get("timeline").getS().trim(),
+				"true");
 		PastUserRequest pastUserRequest = new PastUserRequest(user, userRequest.getDetails(), userRequest.getPrice(),
 				userRequest.getTimeline());
 
@@ -152,16 +176,23 @@ public class ProviderSmsWebhookHandler {
 		ScanRequest providerScan = new ScanRequest().withTableName("Providers");
 		ScanResult providers = client.scan(providerScan);
 
-		for (Map<String, AttributeValue> dbValues : providers.getItems()) {
-			String test = dbValues.get("type").getN() == null ? dbValues.get("type").getS()
+		end: for (Map<String, AttributeValue> dbValues : providers.getItems()) {
+			String providerTypes = dbValues.get("type").getN() == null ? dbValues.get("type").getS()
 					: dbValues.get("type").getN();
-			if (test.contains("" + user.getType())
-					&& !dbValues.get("phoneNumber").getS().equals(user.getPhoneNumber())) {
-				String text = user.userName + " needs " + types(user.getType()) + ".\nDetails: "
-						+ userRequest.getDetails() + "\nPrice: " + userRequest.getPrice() + "\nTimeline: "
-						+ userRequest.getTimeline();
-				String number = "" + dbValues.get("phoneNumber").getS();
-				Message message = Message.creator(new PhoneNumber(number), new PhoneNumber(myNumber), text).create();
+			String hirerTypes = userRequest.getUser().getType();
+
+			for (String s : hirerTypes.split("")) {
+				if (!s.equals("") && providerTypes.contains(s)) {
+					if (!dbValues.get("phoneNumber").getS().equals(user.getPhoneNumber())) {
+						String text = user.userName + " has an opportunity" + ".\nDetails: " + userRequest.getDetails()
+								+ "\nPrice: " + userRequest.getPrice() + "\nTimeline: " + userRequest.getTimeline();
+						String number = dbValues.get("phoneNumber").getS();
+						Message message = Message.creator(new PhoneNumber(number), new PhoneNumber(myNumber), text)
+								.create();
+						break end;
+					}
+
+				}
 			}
 		}
 	}
@@ -207,7 +238,7 @@ public class ProviderSmsWebhookHandler {
 					.create();
 			String provName = providerName.split(" ").length > 1 ? providerName.split(" ")[0] : providerName;
 			Message m = Message.creator(new PhoneNumber(userPhoneNumber), new PhoneNumber(myNumber),
-					provName + " wants to fulfill your gig. Their number is " + providerPhoneNumber
+					provName + " wants to fulfill " + body + "'s gig. Their number is " + providerPhoneNumber
 							+ "\nSend them a message to begin the gig.")
 					.create();
 
@@ -216,25 +247,16 @@ public class ProviderSmsWebhookHandler {
 		throw new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "");
 	}
 
-	/*
-	 * After each provider iteration, I delete them from the DB to make sure that
-	 * they can't receive requests once they accept one request. They have to go
-	 * through the entire same flow again. This ensures that users can't randomly
-	 * receive requests when they aren't expecting to receive requests. Twilio won't
-	 * properly be able to read their requests either if they are in a totally
-	 * different section
-	 * 
-	 * @param name the provider's name
-	 * 
-	 * @param type the provider's type
-	 * 
-	 * @param number the provider's number
-	 */
-	@RequestMapping(value = "/deleteProviders")
-	public void deleteProviders(@RequestParam("Name") String name, @RequestParam("Type") String type,
-			@RequestParam("Number") String number) throws NoSuchAlgorithmException {
-		Provider provider = new Provider(type, name, number);
-		Table table = dynamo.getTable("Providers");
-		table.deleteItem("providerId", provider.getProviderId());// deletes item
+	@RequestMapping(value = "/sendUpdates")
+	public void sendOut() {
+		ScanRequest providerScan = new ScanRequest().withTableName("Providers");
+		ScanResult providers = client.scan(providerScan);
+		Twilio.init(accountSid, authToken);
+		for (Map<String, AttributeValue> dbValues : providers.getItems()) {
+			String text = "Hey! We just changed our sign up process, please type STOP and START to get notified on micro internship opportunities.";
+			String number = "" + dbValues.get("phoneNumber").getS();
+			Message message = Message.creator(new PhoneNumber(number), new PhoneNumber(myNumber), text).create();
+		}
+
 	}
 }

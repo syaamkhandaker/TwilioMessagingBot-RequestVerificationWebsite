@@ -1,13 +1,18 @@
 package com.example.demo.WebhookHandlers;
 
 import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpServerErrorException;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -37,6 +42,9 @@ public class UserSmsWebhookHandler {
 
 	@Autowired
 	private UserRequestRepo requestRepo;
+	
+	
+	private UserRequest userRequest;
 
 	private static final String endpoint = "dynamodb.us-east-2.amazonaws.com";
 	private static final String accessKey = "AKIAUFHDV5GBNYWFDPO7";
@@ -51,7 +59,7 @@ public class UserSmsWebhookHandler {
 			.withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials(accessKey, privateKey))).build();
 	private DynamoDB dynamo = new DynamoDB(client);
 
-	/*
+	/**
 	 * This method adds each of the Student users into the database. The database is
 	 * formatted as following: userId | userName | type | phoneNumber
 	 * ______________________________________
@@ -83,8 +91,32 @@ public class UserSmsWebhookHandler {
 		}
 
 	}
+	
+	@RequestMapping(value = "/addUserRequest", method = RequestMethod.POST)
+	public void addOneUserRequest(@RequestParam("Name") String name, @RequestParam("Type") String type, @RequestParam("PhoneNumber") String number, @RequestParam("Request") String req)
+			throws NumberFormatException, NoSuchAlgorithmException, InterruptedException {
+		
+		String[] arr = req.split(System.lineSeparator()); // 1.P 2.j 3.fas -> [1],[P 2], [j 3], [fas]
+		String details = arr[0].substring(3).trim();
+		String price = arr[1].substring(3).trim();
+		String timeline = arr[2].substring(3).trim();
+		
+		userRequest = new UserRequest(new UserCopy(type.trim(), name.trim(), number.trim()), details, price, timeline, "false");
+		Map<String, String> map = new HashMap<>();
+		map.put("phoneNumber", userRequest.getUser().getPhoneNumber());
+		map.put("type", userRequest.getUser().getType());
+		map.put("userId", userRequest.getUser().getUserId());
+		map.put("userName", userRequest.getUser().getUserName());
+		Table table = dynamo.getTable("UserRequest");
+		Item item = new Item().withPrimaryKey("requestId", userRequest.getRequestId())
+				.with("details", userRequest.getDetails()).with("price", userRequest.getPrice())
+				.with("timeline", userRequest.getTimeline()).with("approved", userRequest.isApproved())
+				.withMap("User", map);
 
-	/*
+		table.putItem(item);
+	}
+
+	/**
 	 * Method adds value to database in the condition that Ford approves it. Still
 	 * working on functionality of how to check if Ford does. UserRequest Database
 	 * looks like the following:
@@ -104,26 +136,21 @@ public class UserSmsWebhookHandler {
 	 * @param request takes in the specific request with its details for pricing,
 	 * timeline, the time it would take, and the specific details
 	 */
-	@RequestMapping(value = "/userRequests", method = RequestMethod.POST)
-	public void addUserRequest(@RequestParam("Name") String name, @RequestParam("Type") String type,
-			@RequestParam("Number") String number, @RequestParam("Request") String request)
-			throws NumberFormatException, NoSuchAlgorithmException {
-		String[] arr = request.split("\\."); // 1.P 2.j 3.fas -> [1],[P 2], [j 3], [fas]
-		String details = arr[1].substring(0, arr[1].length() - 1).trim();
-		String price = arr[2].substring(0, arr[2].length() - 1).trim();
-		String timeline = arr[3].trim();
+	@RequestMapping(value = "/checkUserRequest", method = RequestMethod.POST, produces="application/json")
+	@ResponseBody
+	public String checkUserRequest()
+			throws NumberFormatException, NoSuchAlgorithmException, InterruptedException {
+		Thread.sleep(8000);
+		Table table = dynamo.getTable("UserRequest");
+		GetItemSpec spec = new GetItemSpec().withPrimaryKey("requestId", userRequest.getRequestId());
+		Item get = table.getItem(spec);
 
-		UserRequest userRequest = new UserRequest(new UserCopy(type.trim(), name.trim(), number.trim()), details, price,
-				timeline);
-		requestRepo.save(userRequest);// saves value to dynamodb database
-
-	}
-
-	@RequestMapping(value = "/deleteUser")
-	public void deleteUser(@RequestParam("Name") String name, @RequestParam("Type") String type,
-			@RequestParam("Number") String number) throws NoSuchAlgorithmException {
-		User user = new User(type, name, number);
-		Table table = dynamo.getTable("Users");
-		table.deleteItem("userId", user.getUserId());// deletes item
+		if (get.get("approved").equals("decline")) {
+			table.deleteItem("requestId", userRequest.getRequestId());
+			return "{\"approved\": \"decline\"}";
+		} else if(get.get("approved").equals("accept")) {
+			return "{\"approved\": \"accept\"}";
+		} 
+		return "{\"approved\":\"" + get.get("approved") + "\"}";
 	}
 }
